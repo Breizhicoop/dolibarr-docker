@@ -1,0 +1,78 @@
+version: '3.7'
+
+networks:
+    front:
+        #external: true
+        driver: bridge
+        ipam:
+            driver: default
+            config:
+                - subnet: 10.0.1.0/24
+    back:
+        driver: bridge
+        ipam:
+            driver: default
+            config:
+                - subnet: 10.0.2.0/24
+
+volumes:
+    breizh-dolibarr-sql:
+    #~ breizh-dolibarr-docs:
+
+services:
+    # Conteneur MariaDB
+    mariadb:
+        image: mariadb:10.1
+        restart: always
+        environment:
+            MYSQL_ROOT_PASSWORD: ${DOLI_DB_ROOT_PASSWORD}
+            MYSQL_DATABASE: ${DOLI_DB_NAME:-dolibarr}
+            MYSQL_USER: ${DOLI_DB_USER:-doliuser}
+            MYSQL_PASSWORD: ${DOLI_DB_PASSWORD}
+        volumes:
+            - ./conf/mariadb/mysqld_charset.cnf:/etc/mysql/conf.d/mysqld_charset.cnf:ro
+            - breizh-dolibarr-sql:/var/lib/mysql
+        networks:
+            back:
+                aliases:
+                    - db
+
+    # Conteneur Dolibarr
+    web:
+        image: "${HUBSOURCE}:${HUBDOLIVERSION}"
+        restart: always
+        environment:
+            - DOLI_DB_HOST
+            - DOLI_DB_NAME
+            - DOLI_DB_USER
+            - DOLI_DB_PASSWORD
+            - DOLI_URL_ROOT
+            - DOLI_ADMIN_LOGIN
+            - DOLI_ADMIN_PASSWORD
+            #~ - WWW_USER_ID
+            #~ - WWW_GROUP_ID
+        ports:
+            - "80:80"
+        links:
+            - mariadb
+        volumes:
+            - ./files/dolibarr/custom:/var/www/html/custom:rw
+            #~ - breizh-dolibarr-docs:/var/www/documents
+            - ./files/dolibarr/documents:/var/www/documents:rw
+            - ./files/dolibarr/doctemplates:/var/www/documents/doctemplates:ro
+            - ./files/dolibarr/docxlstemplates:/var/www/documents/docxlstemplates:ro
+        networks:
+            - back
+            - front
+
+    # Conteneur Adminer
+    adminer:
+        image: adminer
+        restart: always
+        links:
+            - mariadb
+        ports:
+            - 8080:8080
+        networks:
+            - back
+            - front
